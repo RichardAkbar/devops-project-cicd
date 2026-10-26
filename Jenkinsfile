@@ -74,6 +74,21 @@ pipeline {
             }
         }
 
+        stage('Generate SBOM') {
+            steps {
+                sh """
+                    set -eu
+                    trivy image \\
+                      --format cyclonedx \\
+                      --output sbom-${IMAGE_TAG}.json \\
+                      "${IMAGE_NAME}:${IMAGE_TAG}"
+
+                    test -s "sbom-${IMAGE_TAG}.json"
+                    echo "SBOM generated successfully."
+                """
+            }
+        }
+
         stage('Push to Registry') {
             steps {
                 withCredentials([
@@ -123,8 +138,15 @@ pipeline {
     }
 
     post {
+        always {
+            archiveArtifacts(
+                artifacts: 'sbom-*.json',
+                allowEmptyArchive: true,
+                fingerprint: true
+            )
+        }
         success {
-            echo 'CI pipeline completed: security scan passed, image pushed, and Kubernetes deployment verified.'
+            echo 'CI pipeline completed: security scan passed, SBOM archived, image pushed, and Kubernetes deployment verified.'
         }
         failure {
             echo 'Pipeline failed. Check the stage logs.'
