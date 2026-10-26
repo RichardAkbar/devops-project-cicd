@@ -8,8 +8,8 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME = 'devops-project-cicd'
-        IMAGE_TAG  = 'build-${BUILD_NUMBER}'
+       IMAGE_NAME = 'devops-project-cicd'
+       IMAGE_TAG  = "build-${BUILD_NUMBER}"
     }
 
     stages {
