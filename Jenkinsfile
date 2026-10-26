@@ -86,6 +86,25 @@ pipeline {
                 }
             }
         }
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh """
+                    set -eu
+                    export KUBECONFIG=/var/lib/jenkins/.kube/config
+
+                    kubectl set image deployment/devops-project-cicd \
+                      web="\${REGISTRY}/\${IMAGE_NAME}:\${IMAGE_TAG}"
+
+                    kubectl rollout status deployment/devops-project-cicd \
+                      --timeout=120s
+
+                    kubectl exec deployment/devops-project-cicd -- \
+                      wget -q -O /dev/null http://127.0.0.1:8080/
+
+                    echo "Kubernetes deployment and HTTP health check passed."
+                """
+            }
+        }
     }
 
     post {
