@@ -59,6 +59,21 @@ pipeline {
             }
         }
 
+        stage('Trivy Image Scan') {
+            steps {
+                sh """
+                    set -eu
+
+                    trivy image \\
+                      --scanners vuln \\
+                      --severity HIGH,CRITICAL \\
+                      --ignore-unfixed \\
+                      --exit-code 1 \\
+                      "${IMAGE_NAME}:${IMAGE_TAG}"
+                """
+            }
+        }
+
         stage('Push to Registry') {
             steps {
                 withCredentials([
@@ -109,7 +124,7 @@ pipeline {
 
     post {
         success {
-            echo 'CI pipeline completed and image pushed to registry.'
+            echo 'CI pipeline completed: security scan passed, image pushed, and Kubernetes deployment verified.'
         }
         failure {
             echo 'Pipeline failed. Check the stage logs.'

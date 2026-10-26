@@ -1,4 +1,6 @@
-FROM nginx:1.28-alpine
+FROM nginx:stable-alpine
+
+RUN apk upgrade --no-cache
 
 RUN sed -i \
       -e '/^[[:space:]]*user[[:space:]]\+nginx;/d' \
