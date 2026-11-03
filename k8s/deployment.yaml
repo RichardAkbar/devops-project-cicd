@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portfolio
+  namespace: portfolio
+  labels:
+    app: portfolio
+    app.kubernetes.io/name: portfolio
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: portfolio
+
+  template:
+    metadata:
+      labels:
+        app: portfolio
+        app.kubernetes.io/name: portfolio
+
+    spec:
+      imagePullSecrets:
+        - name: registry-credentials
+
+      containers:
+        - name: portfolio
+          image: docker-host:5000/devops-portfolio:build-3
+          imagePullPolicy: Always
+
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+
+          volumeMounts:
+            - name: nginx-tmp
+              mountPath: /tmp
+
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+            failureThreshold: 12
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 20
+
+      volumes:
+        - name: nginx-tmp
+          emptyDir: {}
