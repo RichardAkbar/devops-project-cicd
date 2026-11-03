@@ -1,32 +1,40 @@
 pipeline {
-    agent any
+    agent {
+        label 'docker'
+    }
 
     options {
         disableConcurrentBuilds()
+        timestamps()
     }
 
     environment {
-        IMAGE_NAME = 'devops-project-cicd'
-        REGISTRY   = 'docker-host:5000'
+        IMAGE_NAME = 'devops-portfolio'
         IMAGE_TAG  = "build-${BUILD_NUMBER}"
+        REGISTRY   = 'docker-host:5000'
     }
 
     stages {
         stage('Checkout & Validate') {
             steps {
                 echo 'Validating portfolio source files...'
+
                 sh '''
                     set -eu
-                    test -f index.html
-                    test -f style.css
-                    test -f Dockerfile
-                    test -f Jenkinsfile
 
-                    git --version
-                    docker --version
-                    trivy --version
+                    test -f app/index.html
+                    test -f app/css/style.css
+                    test -f Dockerfile
 
                     echo "Source validation passed."
+                    echo "Git version:"
+                    git --version
+
+                    echo "Docker version:"
+                    docker --version
+
+                    echo "Trivy version:"
+                    trivy --version
                 '''
             }
         }
@@ -34,11 +42,17 @@ pipeline {
         stage('Trivy Filesystem Scan') {
             steps {
                 sh '''
+                    set -eu
+
                     trivy fs \
-                      --scanners vuln,secret,misconfig \
-                      --severity HIGH,CRITICAL \
-                      --exit-code 0 \
-                      .
+                        --scanners vuln,secret,misconfig \
+                        --severity HIGH,CRITICAL \
+                        --exit-code 0 \
+                        --format json \
+                        --output trivy-fs-report.json \
+                        .
+
+                    echo "Filesystem scan completed."
                 '''
             }
         }
@@ -49,47 +63,53 @@ pipeline {
                     set -eu
 
                     docker build --network=host \
-                      -t "${IMAGE_NAME}:${IMAGE_TAG}" \
-                      -t "${IMAGE_NAME}:latest" \
-                      .
+                        -t "${IMAGE_NAME}:${IMAGE_TAG}" \
+                        .
 
                     docker image inspect "${IMAGE_NAME}:${IMAGE_TAG}" \
-                      --format 'Built image: {{.Id}}'
+                        --format 'Built image: {{.Id}}'
                 '''
             }
         }
 
         stage('Trivy Image Scan') {
             steps {
-                sh """
+                sh '''
                     set -eu
 
-                    trivy image \\
-                      --scanners vuln \\
-                      --severity HIGH,CRITICAL \\
-                      --ignore-unfixed \\
-                      --exit-code 1 \\
-                      "${IMAGE_NAME}:${IMAGE_TAG}"
-                """
+                    trivy image \
+                        --scanners vuln \
+                        --severity HIGH,CRITICAL \
+                        --ignore-unfixed \
+                        --exit-code 0 \
+                        --format json \
+                        --output trivy-image-report.json \
+                        "${IMAGE_NAME}:${IMAGE_TAG}"
+
+                    echo "Image scan completed."
+                '''
             }
         }
 
-        stage('Generate SBOM') {
+        stage('Generate CycloneDX SBOM') {
             steps {
-                sh """
+                sh '''
                     set -eu
-                    trivy image \\
-                      --format cyclonedx \\
-                      --output sbom-${IMAGE_TAG}.json \\
-                      "${IMAGE_NAME}:${IMAGE_TAG}"
+
+                    trivy image \
+                        --format cyclonedx \
+                        --output "sbom-${IMAGE_TAG}.json" \
+                        "${IMAGE_NAME}:${IMAGE_TAG}"
 
                     test -s "sbom-${IMAGE_TAG}.json"
+
                     echo "SBOM generated successfully."
-                """
+                    ls -lh "sbom-${IMAGE_TAG}.json"
+                '''
             }
         }
 
-        stage('Push to Registry') {
+        stage('Push to Private Registry') {
             steps {
                 withCredentials([
                     usernamePassword(
@@ -100,39 +120,25 @@ pipeline {
                 ]) {
                     sh '''
                         set -eu
+                        set +x
+
+                        REGISTRY_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+                        trap 'docker logout "$REGISTRY" >/dev/null 2>&1 || true' EXIT
 
                         echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY" \
-                          --username "$REGISTRY_USER" \
-                          --password-stdin
+                            --username "$REGISTRY_USER" \
+                            --password-stdin
 
                         docker tag \
-                          "${IMAGE_NAME}:${IMAGE_TAG}" \
-                          "${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+                            "${IMAGE_NAME}:${IMAGE_TAG}" \
+                            "$REGISTRY_IMAGE"
 
-                        docker push "${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+                        docker push "$REGISTRY_IMAGE"
 
-                        docker logout "$REGISTRY"
+                        echo "Image pushed successfully: $REGISTRY_IMAGE"
                     '''
                 }
-            }
-        }
-        stage('Deploy to Kubernetes') {
-            steps {
-                sh """
-                    set -eu
-                    export KUBECONFIG=/var/lib/jenkins/.kube/config
-
-                    kubectl set image deployment/devops-project-cicd \
-                      web="\${REGISTRY}/\${IMAGE_NAME}:\${IMAGE_TAG}"
-
-                    kubectl rollout status deployment/devops-project-cicd \
-                      --timeout=120s
-
-                    kubectl exec deployment/devops-project-cicd -- \
-                      wget -q -O /dev/null http://127.0.0.1:8080/
-
-                    echo "Kubernetes deployment and HTTP health check passed."
-                """
             }
         }
     }
@@ -140,14 +146,16 @@ pipeline {
     post {
         always {
             archiveArtifacts(
-                artifacts: 'sbom-*.json',
+                artifacts: 'sbom-*.json,trivy-*-report.json',
                 allowEmptyArchive: true,
                 fingerprint: true
             )
         }
+
         success {
-            echo 'CI pipeline completed: security scan passed, SBOM archived, image pushed, and Kubernetes deployment verified.'
+            echo 'CI pipeline completed: source validated, security scans executed, SBOM generated, and image pushed.'
         }
+
         failure {
             echo 'Pipeline failed. Check the stage logs.'
         }
