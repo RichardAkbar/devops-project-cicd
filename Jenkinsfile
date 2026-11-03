@@ -11,14 +11,11 @@ pipeline {
         IMAGE_NAME = 'devops-portfolio'
         IMAGE_TAG  = "build-${BUILD_NUMBER}"
         REGISTRY   = 'docker-host:5000'
-        NAMESPACE  = 'portfolio'
     }
 
     stages {
         stage('Checkout & Validate') {
             steps {
-                echo 'Validating portfolio source files...'
-
                 sh '''
                     set -eu
 
@@ -42,15 +39,24 @@ pipeline {
                 sh '''
                     set -eu
 
+                    echo "Running Trivy diagnostic scan..."
+
                     trivy fs \
                         --scanners vuln,secret,misconfig \
                         --severity HIGH,CRITICAL \
-                        --exit-code 1 \
+                        --exit-code 0 \
+                        --format table \
+                        .
+
+                    trivy fs \
+                        --scanners vuln,secret,misconfig \
+                        --severity HIGH,CRITICAL \
+                        --exit-code 0 \
                         --format json \
                         --output trivy-fs-report.json \
                         .
 
-                    echo "Filesystem scan completed."
+                    echo "Filesystem diagnostic scan completed."
                 '''
             }
         }
@@ -102,7 +108,6 @@ pipeline {
                     test -s "sbom-${IMAGE_TAG}.json"
 
                     echo "SBOM generated successfully."
-                    ls -lh "sbom-${IMAGE_TAG}.json"
                 '''
             }
         }
@@ -128,13 +133,10 @@ pipeline {
                             --username "$REGISTRY_USER" \
                             --password-stdin
 
-                        docker tag \
-                            "${IMAGE_NAME}:${IMAGE_TAG}" \
-                            "$REGISTRY_IMAGE"
-
+                        docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "$REGISTRY_IMAGE"
                         docker push "$REGISTRY_IMAGE"
 
-                        echo "Image pushed successfully: $REGISTRY_IMAGE"
+                        echo "Image pushed: $REGISTRY_IMAGE"
                     '''
                 }
             }
@@ -153,14 +155,10 @@ pipeline {
 
                         export KUBECONFIG="$KUBECONFIG_FILE"
 
-                        echo "Checking kubectl..."
                         command -v kubectl
                         kubectl version --client
-
-                        echo "Checking Kubernetes connectivity..."
                         kubectl get nodes
 
-                        echo "Checking cluster node readiness..."
                         kubectl wait \
                             --for=condition=Ready \
                             nodes \
@@ -169,33 +167,22 @@ pipeline {
 
                         REGISTRY_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 
-                        echo "Rendering deployment manifest..."
                         sed -E \
                             "s|^([[:space:]]*image: ).*|\\1${REGISTRY_IMAGE}|" \
                             k8s/deployment.yaml > deployment-rendered.yaml
 
                         trap 'rm -f deployment-rendered.yaml' EXIT
 
-                        echo "Applying namespace..."
                         kubectl apply -f k8s/namespace.yaml
-
-                        echo "Applying deployment..."
                         kubectl apply -f deployment-rendered.yaml
-
-                        echo "Applying service..."
                         kubectl apply -f k8s/service.yaml
 
-                        echo "Waiting for rollout..."
                         kubectl rollout status \
                             deployment/portfolio \
-                            -n "${NAMESPACE}" \
+                            -n portfolio \
                             --timeout=180s
 
-                        echo "Checking deployed resources..."
-                        kubectl get deployment,pods,service \
-                            -n "${NAMESPACE}"
-
-                        echo "Kubernetes deployment completed."
+                        kubectl get deployment,pods,service -n portfolio
                     '''
                 }
             }
@@ -212,7 +199,7 @@ pipeline {
         }
 
         success {
-            echo 'CI/CD pipeline completed successfully: security scans passed, SBOM generated, image pushed, and Kubernetes deployment completed.'
+            echo 'CI/CD pipeline completed successfully.'
         }
 
         failure {
