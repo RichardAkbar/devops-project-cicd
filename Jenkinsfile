@@ -34,6 +34,32 @@ pipeline {
             }
         }
 
+        stage('Agent Diagnostics') {
+            steps {
+                sh '''
+                    echo "=== Jenkins Agent Information ==="
+                    hostname
+                    whoami
+                    pwd
+
+                    echo ""
+                    echo "=== Available Tools ==="
+
+                    for tool in kubectl docker trivy curl wget; do
+                        if command -v "$tool" >/dev/null 2>&1; then
+                            echo "$tool: $(command -v "$tool")"
+                        else
+                            echo "$tool: NOT FOUND"
+                        fi
+                    done
+
+                    echo ""
+                    echo "=== Operating System ==="
+                    cat /etc/os-release
+                '''
+            }
+        }
+
         stage('Trivy Filesystem Scan') {
             steps {
                 sh '''
