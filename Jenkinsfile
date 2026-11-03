@@ -5,12 +5,14 @@ pipeline {
 
     options {
         disableConcurrentBuilds()
+        timestamps()
     }
 
     environment {
         IMAGE_NAME = 'devops-portfolio'
         IMAGE_TAG  = "build-${BUILD_NUMBER}"
         REGISTRY   = 'docker-host:5000'
+        NAMESPACE  = 'portfolio'
     }
 
     stages {
@@ -24,15 +26,13 @@ pipeline {
                     test -f app/index.html
                     test -f app/css/style.css
                     test -f Dockerfile
+                    test -f k8s/namespace.yaml
+                    test -f k8s/deployment.yaml
+                    test -f k8s/service.yaml
 
                     echo "Source validation passed."
-                    echo "Git version:"
                     git --version
-
-                    echo "Docker version:"
                     docker --version
-
-                    echo "Trivy version:"
                     trivy --version
                 '''
             }
@@ -140,6 +140,67 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'my-kube-config-credentials',
+                        variable: 'KUBECONFIG_FILE'
+                    )
+                ]) {
+                    sh '''
+                        set -eu
+
+                        export KUBECONFIG="$KUBECONFIG_FILE"
+
+                        echo "Checking kubectl..."
+                        command -v kubectl
+                        kubectl version --client
+
+                        echo "Checking Kubernetes connectivity..."
+                        kubectl get nodes
+
+                        echo "Checking cluster node readiness..."
+                        kubectl wait \
+                            --for=condition=Ready \
+                            nodes \
+                            --all \
+                            --timeout=60s
+
+                        REGISTRY_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+                        echo "Rendering deployment manifest..."
+                        sed -E \
+                            "s|^([[:space:]]*image: ).*|\\1${REGISTRY_IMAGE}|" \
+                            k8s/deployment.yaml > deployment-rendered.yaml
+
+                        trap 'rm -f deployment-rendered.yaml' EXIT
+
+                        echo "Applying namespace..."
+                        kubectl apply -f k8s/namespace.yaml
+
+                        echo "Applying deployment..."
+                        kubectl apply -f deployment-rendered.yaml
+
+                        echo "Applying service..."
+                        kubectl apply -f k8s/service.yaml
+
+                        echo "Waiting for rollout..."
+                        kubectl rollout status \
+                            deployment/portfolio \
+                            -n "${NAMESPACE}" \
+                            --timeout=180s
+
+                        echo "Checking deployed resources..."
+                        kubectl get deployment,pods,service \
+                            -n "${NAMESPACE}"
+
+                        echo "Kubernetes deployment completed."
+                    '''
+                }
+            }
+        }
     }
 
     post {
@@ -152,7 +213,7 @@ pipeline {
         }
 
         success {
-            echo 'CI pipeline completed: source validated, security scans executed, SBOM generated, and image pushed.'
+            echo 'CI/CD pipeline completed successfully: security scans passed, SBOM generated, image pushed, and Kubernetes deployment completed.'
         }
 
         failure {
