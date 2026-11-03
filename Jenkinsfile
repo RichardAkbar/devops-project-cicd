@@ -8,9 +8,11 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME = 'devops-portfolio'
-        IMAGE_TAG  = "build-${BUILD_NUMBER}"
-        REGISTRY   = 'docker-host:5000'
+        IMAGE_NAME      = 'devops-portfolio'
+        IMAGE_TAG       = "build-${BUILD_NUMBER}"
+        REGISTRY        = 'docker-host:5000'
+        NAMESPACE       = 'portfolio'
+        KUBECTL_VERSION = 'v1.32.0'
     }
 
     stages {
@@ -34,55 +36,20 @@ pipeline {
             }
         }
 
-        stage('Agent Diagnostics') {
-            steps {
-                sh '''
-                    echo "=== Jenkins Agent Information ==="
-                    hostname
-                    whoami
-                    pwd
-
-                    echo ""
-                    echo "=== Available Tools ==="
-
-                    for tool in kubectl docker trivy curl wget; do
-                        if command -v "$tool" >/dev/null 2>&1; then
-                            echo "$tool: $(command -v "$tool")"
-                        else
-                            echo "$tool: NOT FOUND"
-                        fi
-                    done
-
-                    echo ""
-                    echo "=== Operating System ==="
-                    cat /etc/os-release
-                '''
-            }
-        }
-
         stage('Trivy Filesystem Scan') {
             steps {
                 sh '''
                     set -eu
 
-                    echo "Running Trivy diagnostic scan..."
-
                     trivy fs \
                         --scanners vuln,secret,misconfig \
                         --severity HIGH,CRITICAL \
-                        --exit-code 0 \
-                        --format table \
-                        .
-
-                    trivy fs \
-                        --scanners vuln,secret,misconfig \
-                        --severity HIGH,CRITICAL \
-                        --exit-code 0 \
+                        --exit-code 1 \
                         --format json \
                         --output trivy-fs-report.json \
                         .
 
-                    echo "Filesystem diagnostic scan completed."
+                    echo "Filesystem security scan passed."
                 '''
             }
         }
@@ -116,7 +83,7 @@ pipeline {
                         --output trivy-image-report.json \
                         "${IMAGE_NAME}:${IMAGE_TAG}"
 
-                    echo "Image scan completed."
+                    echo "Image security scan passed."
                 '''
             }
         }
@@ -134,6 +101,7 @@ pipeline {
                     test -s "sbom-${IMAGE_TAG}.json"
 
                     echo "SBOM generated successfully."
+                    ls -lh "sbom-${IMAGE_TAG}.json"
                 '''
             }
         }
@@ -159,10 +127,13 @@ pipeline {
                             --username "$REGISTRY_USER" \
                             --password-stdin
 
-                        docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "$REGISTRY_IMAGE"
+                        docker tag \
+                            "${IMAGE_NAME}:${IMAGE_TAG}" \
+                            "$REGISTRY_IMAGE"
+
                         docker push "$REGISTRY_IMAGE"
 
-                        echo "Image pushed: $REGISTRY_IMAGE"
+                        echo "Image pushed successfully: $REGISTRY_IMAGE"
                     '''
                 }
             }
@@ -181,8 +152,27 @@ pipeline {
 
                         export KUBECONFIG="$KUBECONFIG_FILE"
 
-                        command -v kubectl
+                        echo "=== Preparing kubectl ==="
+
+                        mkdir -p "$WORKSPACE/.bin"
+
+                        curl -fsSLo "$WORKSPACE/.bin/kubectl" \
+                            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+
+                        curl -fsSLo "$WORKSPACE/.bin/kubectl.sha256" \
+                            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256"
+
+                        echo "$(cat "$WORKSPACE/.bin/kubectl.sha256")  $WORKSPACE/.bin/kubectl" \
+                            | sha256sum -c -
+
+                        chmod +x "$WORKSPACE/.bin/kubectl"
+
+                        export PATH="$WORKSPACE/.bin:$PATH"
+
                         kubectl version --client
+
+                        echo "=== Checking Kubernetes connectivity ==="
+
                         kubectl get nodes
 
                         kubectl wait \
@@ -190,6 +180,8 @@ pipeline {
                             nodes \
                             --all \
                             --timeout=60s
+
+                        echo "=== Rendering deployment manifest ==="
 
                         REGISTRY_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 
@@ -199,16 +191,27 @@ pipeline {
 
                         trap 'rm -f deployment-rendered.yaml' EXIT
 
+                        echo "=== Applying Kubernetes resources ==="
+
                         kubectl apply -f k8s/namespace.yaml
+
                         kubectl apply -f deployment-rendered.yaml
+
                         kubectl apply -f k8s/service.yaml
+
+                        echo "=== Waiting for deployment rollout ==="
 
                         kubectl rollout status \
                             deployment/portfolio \
-                            -n portfolio \
+                            -n "${NAMESPACE}" \
                             --timeout=180s
 
-                        kubectl get deployment,pods,service -n portfolio
+                        echo "=== Deployment resources ==="
+
+                        kubectl get deployment,pods,service \
+                            -n "${NAMESPACE}"
+
+                        echo "Kubernetes deployment completed."
                     '''
                 }
             }

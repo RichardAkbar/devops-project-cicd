@@ -23,6 +23,13 @@ spec:
       imagePullSecrets:
         - name: registry-credentials
 
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+
       containers:
         - name: portfolio
           image: docker-host:5000/devops-portfolio:build-3
