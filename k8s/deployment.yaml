@@ -27,8 +27,40 @@ spec:
         runAsNonRoot: true
         runAsUser: 101
         runAsGroup: 101
+        fsGroup: 101
         seccompProfile:
           type: RuntimeDefault
+
+      initContainers:
+        - name: prepare-nginx-tmp
+          image: docker-host:5000/devops-portfolio:build-3
+          imagePullPolicy: Always
+
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              mkdir -p \
+                /tmp/nginx/client_temp \
+                /tmp/nginx/proxy_temp \
+                /tmp/nginx/fastcgi_temp \
+                /tmp/nginx/uwsgi_temp \
+                /tmp/nginx/scgi_temp
+
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+
+          volumeMounts:
+            - name: nginx-tmp
+              mountPath: /tmp
 
       containers:
         - name: portfolio
