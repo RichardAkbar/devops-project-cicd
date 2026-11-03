@@ -46,7 +46,7 @@ pipeline {
                     trivy fs \
                         --scanners vuln,secret,misconfig \
                         --severity HIGH,CRITICAL \
-                        --exit-code 0 \
+                        --exit-code 1 \
                         --format json \
                         --output trivy-fs-report.json \
                         .
@@ -80,7 +80,7 @@ pipeline {
                         --scanners vuln \
                         --severity HIGH,CRITICAL \
                         --ignore-unfixed \
-                        --exit-code 0 \
+                        --exit-code 1 \
                         --format json \
                         --output trivy-image-report.json \
                         "${IMAGE_NAME}:${IMAGE_TAG}"
