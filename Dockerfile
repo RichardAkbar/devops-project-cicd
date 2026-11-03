@@ -2,7 +2,6 @@ FROM nginx:stable-alpine
 
 RUN apk upgrade --no-cache
 
-
 RUN sed -i \
       -e '/^[[:space:]]*user[[:space:]]\+nginx;/d' \
       -e 's|pid[[:space:]]\+/run/nginx.pid;|pid /tmp/nginx.pid;|' \
@@ -25,8 +24,9 @@ RUN sed -i \
                 /tmp/nginx/scgi_temp \
     && chown -R nginx:nginx /tmp/nginx
 
-COPY index.html /usr/share/nginx/html/index.html
-COPY style.css /usr/share/nginx/html/style.css
+COPY app/index.html /usr/share/nginx/html/index.html
+COPY app/css/style.css /usr/share/nginx/html/css/style.css
 
 USER nginx
+
 EXPOSE 8080
