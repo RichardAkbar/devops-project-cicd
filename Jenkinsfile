@@ -3,15 +3,11 @@ pipeline {
         label 'docker'
     }
 
-    options {
-        disableConcurrentBuilds()
-    }
-
     environment {
-        IMAGE_NAME      = 'devops-portfolio'
-        IMAGE_TAG       = "build-${BUILD_NUMBER}"
-        REGISTRY        = 'docker-host:5000'
-        NAMESPACE       = 'portfolio'
+        IMAGE_NAME = 'devops-portfolio'
+        IMAGE_TAG = "build-${BUILD_NUMBER}"
+        REGISTRY = 'docker-host:5000'
+        NAMESPACE = 'portfolio'
         KUBECTL_VERSION = 'v1.32.0'
     }
 
@@ -29,6 +25,7 @@ pipeline {
                     test -f k8s/service.yaml
 
                     echo "Source validation passed."
+
                     git --version
                     docker --version
                     trivy --version
@@ -59,11 +56,13 @@ pipeline {
                 sh '''
                     set -eu
 
-                    docker build --network=host \
+                    docker build \
+                        --network=host \
                         -t "${IMAGE_NAME}:${IMAGE_TAG}" \
                         .
 
-                    docker image inspect "${IMAGE_NAME}:${IMAGE_TAG}" \
+                    docker image inspect \
+                        "${IMAGE_NAME}:${IMAGE_TAG}" \
                         --format 'Built image: {{.Id}}'
                 '''
             }
@@ -111,7 +110,7 @@ pipeline {
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'docker-registry-creds',
-                        usernameVariable: 'REGISTRY_USER',
+                        usernameVariable: 'REGISTRY_USERNAME',
                         passwordVariable: 'REGISTRY_PASSWORD'
                     )
                 ]) {
@@ -121,10 +120,9 @@ pipeline {
 
                         REGISTRY_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 
-                        trap 'docker logout "$REGISTRY" >/dev/null 2>&1 || true' EXIT
-
-                        echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY" \
-                            --username "$REGISTRY_USER" \
+                        echo "$REGISTRY_PASSWORD" | docker login \
+                            "$REGISTRY" \
+                            --username "$REGISTRY_USERNAME" \
                             --password-stdin
 
                         docker tag \
@@ -134,6 +132,8 @@ pipeline {
                         docker push "$REGISTRY_IMAGE"
 
                         echo "Image pushed successfully: $REGISTRY_IMAGE"
+
+                        docker logout "$REGISTRY"
                     '''
                 }
             }
@@ -145,10 +145,16 @@ pipeline {
                     file(
                         credentialsId: 'my-kube-config-credentials',
                         variable: 'KUBECONFIG_FILE'
+                    ),
+                    usernamePassword(
+                        credentialsId: 'docker-registry-creds',
+                        usernameVariable: 'REGISTRY_USERNAME',
+                        passwordVariable: 'REGISTRY_PASSWORD'
                     )
                 ]) {
                     sh '''
                         set -eu
+                        set +x
 
                         export KUBECONFIG="$KUBECONFIG_FILE"
 
@@ -181,6 +187,22 @@ pipeline {
                             --all \
                             --timeout=60s
 
+                        echo "=== Applying Kubernetes namespace ==="
+
+                        kubectl apply -f k8s/namespace.yaml
+
+                        echo "=== Configuring Registry Image Pull Secret ==="
+
+                        kubectl create secret docker-registry registry-credentials \
+                            --docker-server="$REGISTRY" \
+                            --docker-username="$REGISTRY_USERNAME" \
+                            --docker-password="$REGISTRY_PASSWORD" \
+                            --namespace="$NAMESPACE" \
+                            --dry-run=client \
+                            -o yaml | kubectl apply -f -
+
+                        echo "Registry credentials configured successfully."
+
                         echo "=== Rendering deployment manifest ==="
 
                         REGISTRY_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
@@ -192,8 +214,6 @@ pipeline {
                         trap 'rm -f deployment-rendered.yaml' EXIT
 
                         echo "=== Applying Kubernetes resources ==="
-
-                        kubectl apply -f k8s/namespace.yaml
 
                         kubectl apply -f deployment-rendered.yaml
 
