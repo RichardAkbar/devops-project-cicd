@@ -76,10 +76,9 @@ Credential disimpan melalui Jenkins Credentials dan dipanggil berdasarkan ID dar
 Pipeline from SCM
 Jenkins mengambil Jenkinsfile secara langsung dari repository GitHub. Dengan konfigurasi ini, perubahan pipeline dapat dikelola menggunakan Git dan mengikuti version control yang sama dengan aplikasi.
 
-Press enter or click to view image in full size
+![alt text](<jenkins scm.png>)
 
 Step 5 — Membangun DevSecOps CI/CD Pipeline
-Jelaskan bagaimana Jenkins menjalankan setiap tahapan pipeline secara otomatis.
 
 Pipeline Stages
 Pipeline terdiri dari beberapa tahapan berikut:
@@ -91,8 +90,9 @@ Trivy Image Scan — melakukan pemeriksaan vulnerability terhadap Docker image y
 Generate CycloneDX SBOM — menghasilkan Software Bill of Materials dari Docker image.
 Push to Private Registry — mengirim image ke private Docker Registry.
 Deploy to Kubernetes — memperbarui konfigurasi deployment dan menjalankan aplikasi pada Kubernetes.
+
 Implementasi Jenkinsfile
-Press enter or click to view image in full size
+![alt text](<implementasi jenkins.png>)
 
 Step 6 — Security Scanning Menggunakan Trivy
 Security scanning menjadi bagian dari pipeline untuk memeriksa potensi masalah keamanan sebelum image digunakan dalam proses deployment.
@@ -100,13 +100,11 @@ Security scanning menjadi bagian dari pipeline untuk memeriksa potensi masalah k
 Project ini menggunakan Trivy untuk melakukan dua jenis pemeriksaan, yaitu filesystem scanning dan container image scanning.
 
 Filesystem Scanning
-Press enter or click to view image in full size
+![filesystem scanning.png](<filesystem scanning.png>)
 
 Step 7 — Generate SBOM Menggunakan CycloneDX
 Selain security scanning, pipeline juga menghasilkan Software Bill of Materials (SBOM).
 
-Write on Medium
-Subscribe to Pro Writer Tools to remove upgrade prompts from your unlocked stories.
 
 SBOM merupakan daftar komponen perangkat lunak yang terdapat dalam suatu artefak. Informasi ini berguna untuk inventarisasi komponen dan membantu analisis risiko pada software supply chain.
 
@@ -115,7 +113,7 @@ Pada project ini, Trivy digunakan untuk menghasilkan SBOM dalam format CycloneDX
 Generate SBOM
 Pembuatan SBOM dilakukan setelah proses image scanning selesai. File SBOM yang dihasilkan disimpan sebagai build artifact Jenkins sehingga dapat diakses kembali setelah pipeline selesai dijalankan.
 
-Press enter or click to view image in full size
+![sbom.png](sbom.png)
 
 Step 8 — Deployment Aplikasi ke Kubernetes
 Setelah Docker image berhasil dikirim ke private registry, Jenkins melanjutkan proses deployment ke Kubernetes.
@@ -123,7 +121,7 @@ Setelah Docker image berhasil dikirim ke private registry, Jenkins melanjutkan p
 Cluster yang digunakan berjalan pada environment KodeKloud Playground. Aplikasi ditempatkan pada namespace portfolio.
 
 Kubernetes Manifest
-Press enter or click to view image in full size
+![alt text](<kube manifest.png>)
 
 Deployment
 Karena image disimpan pada private registry, Kubernetes membutuhkan kredensial untuk melakukan pull image.
@@ -132,7 +130,7 @@ Jenkins secara otomatis membuat atau memperbarui Secret bernama registry-credent
 
 Secret tersebut digunakan oleh Deployment ketika Kubernetes mengambil image dari registry.
 
-Press enter or click to view image in full size
+![alt text](deployment.png)
 
 Step 9— Monitoring Menggunakan Prometheus
 Monitoring digunakan untuk mengamati kondisi host dan Kubernetes setelah aplikasi berhasil dijalankan.
@@ -147,7 +145,7 @@ Prometheus dipasang pada jump-host dan dijalankan sebagai systemd service. Konfi
 /etc/prometheus/prometheus.yml
 Prometheus mengumpulkan metrics dari beberapa endpoint yang didaftarkan dalam konfigurasi tersebut.
 
-Press enter or click to view image in full size
+![vrifikasi proomeetheeus.png](<vrifikasi proomeetheeus.png>)
 
 Step 10 — Host Monitoring Menggunakan Node Exporter
 Node Exporter digunakan untuk menyediakan metrics terkait kondisi sistem operasi dan resource host.
@@ -182,7 +180,7 @@ Grafana digunakan untuk menampilkan metrics yang dikumpulkan Prometheus dalam be
 Prometheus ditambahkan sebagai data source Grafana, kemudian dashboard dibuat untuk memisahkan pemantauan host dan Kubernetes.
 
 Host Monitoring Dashboard
-Press enter or click to view image in full size
+![Host Monitoring Dashboard.png](<Host Monitoring Dashboard.png>)
 
 Kubernetes Monitoring Dashboard
 Dashboard Kubernetes Monitoring digunakan untuk melihat kondisi workload dan penggunaan resource container.
