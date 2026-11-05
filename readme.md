@@ -170,29 +170,35 @@ Disk read dan write.
 Network traffic.
 System load average.
 Host uptime.
+
 Step 11 — Kubernetes Monitoring
-Monitoring Kubernetes dilakukan dengan mengintegrasikan beberapa sumber metrics ke dalam Prometheus. Setiap komponen menyediakan informasi yang berbeda mengenai kondisi cluster dan workload.
+
+Kubernetes Monitoring
+Monitoring Kubernetes menggabungkan beberapa sumber metrics karena setiap komponen menyediakan informasi yang berbeda.
 
 kube-state-metrics
-kube-state-metrics digunakan untuk menyediakan metrics berdasarkan kondisi objek Kubernetes, seperti Pod, Deployment, Namespace, dan Node.
 
-Metrics ini membantu memantau status resource yang berjalan di dalam cluster.
+kube-state-metrics menyediakan metrics berdasarkan kondisi objek Kubernetes, seperti Pod, Deployment, Namespace, dan Node. Metrics ini digunakan untuk melihat status serta ketersediaan resource Kubernetes.
 
-Kubelet dan cAdvisor
-Kubelet menyediakan informasi terkait kondisi node dan aktivitas container. Sementara itu, cAdvisor menyediakan metrics penggunaan resource container, termasuk CPU dan memory.
+Kubelet
 
-Pada project ini, metrics Kubelet dan cAdvisor diambil melalui Kubernetes API proxy. Service Account khusus dibuat untuk memberikan izin akses yang dibutuhkan Prometheus.
+Kubelet menyediakan metrics dari node dan aktivitas container. Pada implementasi ini, endpoint metrics Kubelet diakses melalui Kubernetes API proxy.
+
+cAdvisor
+
+cAdvisor menyediakan metrics penggunaan resource container, termasuk CPU dan memory. Metrics tersebut digunakan untuk melihat konsumsi resource workload.
+
+Akses Prometheus ke endpoint Kubelet dan cAdvisor menggunakan Service Account khusus dengan izin RBAC yang diperlukan. Token dan sertifikat CA disimpan pada host Prometheus dan tidak dimasukkan ke repository.
 
 Step 12 — Visualisasi Monitoring Menggunakan Grafana
 Grafana digunakan untuk menampilkan metrics yang dikumpulkan Prometheus dalam bentuk dashboard.
 
 Prometheus ditambahkan sebagai data source Grafana, kemudian dashboard dibuat untuk memisahkan pemantauan host dan Kubernetes.
 
-Host Monitoring Dashboard
-![Host Monitoring Dashboard.png](<Host Monitoring Dashboard.png>)
-
 Kubernetes Monitoring Dashboard
 Dashboard Kubernetes Monitoring digunakan untuk melihat kondisi workload dan penggunaan resource container.
+
+![Host Monitoring Dashboard.png](<Host Monitoring Dashboard.png>)
 
 Panel yang ditampilkan meliputi:
 
@@ -205,14 +211,18 @@ Container Restarts.
 Container CPU Usage by Pod.
 Container Memory Working Set.
 Pod Status by Phase.
+
+Dashboard ini menggabungkan metrics dari kube-state-metrics, Kubelet, dan cAdvisor. Informasi tersebut membantu memberikan gambaran mengenai kondisi workload dan penggunaan resource pada cluster.
+
 Kesimpulan
-Project ini mengimplementasikan workflow DevSecOps yang menghubungkan source code management, CI/CD automation, security scanning, SBOM generation, containerization, deployment Kubernetes, dan monitoring.
 
-Jenkins digunakan untuk mengotomatisasi proses build hingga deployment. Trivy diintegrasikan sebagai bagian dari security gate, sementara SBOM dalam format CycloneDX disimpan sebagai build artifact. Docker image didistribusikan melalui private registry sebelum digunakan oleh Kubernetes.
+Project ini menghasilkan implementasi workflow DevSecOps yang menghubungkan source code management, CI/CD automation, security scanning, SBOM generation, containerization, deployment Kubernetes, dan monitoring.
 
-Pada sisi monitoring, Prometheus mengumpulkan metrics dari host dan Kubernetes, kemudian Grafana digunakan untuk menyajikan informasi tersebut melalui dashboard.
+Jenkins digunakan untuk mengotomatisasi proses dari checkout source code hingga deployment. Trivy menjadi bagian dari pipeline untuk memeriksa filesystem dan Docker image, sementara SBOM dalam format CycloneDX disimpan sebagai build artifact. Docker image didistribusikan melalui private registry sebelum digunakan oleh Kubernetes.
 
-Melalui implementasi ini, saya mendapatkan pengalaman dalam mengintegrasikan berbagai komponen DevOps dan DevSecOps ke dalam satu workflow, termasuk pengelolaan credentials, private registry, Kubernetes deployment, dan monitoring.
+Pada sisi monitoring, Prometheus mengumpulkan metrics dari host dan Kubernetes. Grafana kemudian menyajikan metrics tersebut melalui dashboard host monitoring dan Kubernetes monitoring.
+
+Dari implementasi ini, saya mendapatkan pengalaman dalam mengintegrasikan beberapa komponen DevOps dan DevSecOps ke dalam satu workflow, termasuk pengelolaan Jenkins credentials, private registry, Kubernetes Image Pull Secret, RBAC untuk monitoring, dan dashboard observability.
 
 GitHub Repository
 Repository project:
