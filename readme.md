@@ -228,5 +228,3 @@ GitHub Repository
 Repository project:
 
 https://github.com/RichardAkbar/devops-project-cicd
-
-Repository berisi source code aplikasi, Dockerfile, Jenkinsfile, Kubernetes manifests, konfigurasi monitoring, dashboard Grafana, dan dokumentasi project.
