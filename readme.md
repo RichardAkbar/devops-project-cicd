@@ -1,11 +1,16 @@
+Membangun End-to-End DevSecOps Pipeline Menggunakan Jenkins, Docker, Trivy, Kubernetes, Prometheus, dan Grafana
+
 Pendahuluan
-Pada project ini, saya membangun sebuah pipeline DevSecOps untuk mengotomatisasi proses build, security scanning, containerization, dan deployment aplikasi ke Kubernetes.
 
-Aplikasi yang digunakan adalah portfolio website sederhana berbasis HTML dan CSS dengan Nginx sebagai web server. Aplikasi ini menjadi media untuk menerapkan integrasi beberapa tools DevOps dan DevSecOps dalam satu workflow.
+Proses deployment aplikasi tidak berhenti setelah aplikasi berhasil dibuat dan dapat diakses. Dalam workflow DevOps, proses build, pengujian keamanan, distribusi artefak, deployment, dan monitoring perlu dikelola secara konsisten. Pemeriksaan keamanan juga perlu menjadi bagian dari alur tersebut, bukan hanya dilakukan setelah aplikasi berjalan.
 
-Jenkins digunakan untuk mengelola proses CI/CD. Trivy digunakan untuk memeriksa keamanan source code dan Docker image, sedangkan Trivy juga dimanfaatkan untuk menghasilkan SBOM dalam format CycloneDX. Docker digunakan untuk membangun image aplikasi, kemudian image disimpan pada private Docker Registry sebelum digunakan oleh Kubernetes.
+Project ini merupakan implementasi end-to-end DevSecOps menggunakan aplikasi portfolio website sederhana berbasis HTML dan CSS. Aplikasi disajikan menggunakan Nginx, dikemas ke dalam Docker image, lalu diproses melalui pipeline Jenkins.
 
-Selain proses deployment, project ini juga mencakup monitoring host dan Kubernetes menggunakan Prometheus, Node Exporter, kube-state-metrics, Kubelet, dan cAdvisor. Metrics yang dikumpulkan kemudian divisualisasikan melalui Grafana.
+Pipeline mengintegrasikan Trivy untuk memeriksa filesystem dan Docker image. Trivy juga digunakan untuk menghasilkan Software Bill of Materials (SBOM) dalam format CycloneDX. Setelah pemeriksaan selesai, image dikirim ke private Docker Registry dan digunakan oleh Kubernetes untuk menjalankan aplikasi.
+
+Untuk kebutuhan monitoring, Prometheus mengumpulkan metrics dari host dan Kubernetes. Node Exporter menyediakan metrics host, sedangkan kube-state-metrics, Kubelet, dan cAdvisor menyediakan informasi mengenai kondisi resource Kubernetes. Metrics tersebut kemudian divisualisasikan melalui Grafana.
+
+Implementasi dilakukan pada environment KodeKloud Playground. Karena environment Playground bersifat sementara, repository GitHub digunakan sebagai tempat penyimpanan source code, manifest, pipeline, konfigurasi monitoring, dan dokumentasi project
 
 Tujuan Project
 Mengotomatisasi build dan deployment aplikasi menggunakan Jenkins.
@@ -17,12 +22,16 @@ Membangun monitoring untuk host dan Kubernetes.
 Arsitektur Project
 ![alt text](arsitektttur.png)
 
-Arsitektur tersebut menggambarkan alur implementasi project, mulai dari source code yang disimpan di GitHub, proses CI/CD melalui Jenkins, pemeriksaan keamanan menggunakan Trivy, hingga deployment aplikasi ke Kubernetes.
+Alur dimulai ketika source code disimpan pada repository GitHub. Jenkins mengambil repository melalui konfigurasi Pipeline from SCM, kemudian menjalankan tahapan yang didefinisikan pada Jenkinsfile.
 
-Docker image disimpan pada private registry sebelum digunakan oleh Kubernetes. Sementara itu, Prometheus mengumpulkan metrics dari host dan komponen Kubernetes untuk ditampilkan melalui dashboard Grafana.
+Pada tahap CI, Jenkins melakukan validasi awal dan filesystem scanning menggunakan Trivy. Jika tahap tersebut berhasil, Jenkins membangun Docker image. Image yang dihasilkan kemudian diperiksa kembali menggunakan Trivy sebelum SBOM CycloneDX dibuat.
+
+Setelah pemeriksaan selesai, Jenkins mengirim image ke private Docker Registry. Jenkins juga mengakses Kubernetes menggunakan kubeconfig yang disimpan pada Jenkins Credentials. Pipeline menyiapkan registry pull secret, menerapkan manifest aplikasi, dan menunggu proses rollout selesai.
+
+Pada sisi monitoring, Prometheus mengumpulkan metrics dari Node Exporter, kube-state-metrics, Kubelet, dan cAdvisor. Grafana menggunakan Prometheus sebagai data source untuk menampilkan kondisi host dan workload Kubernetes.
 
 Step 1 — Membangun Portfolio Website
-weeb view.png
+![weeb view.png](<weeb view.png>)
 
 Aplikasi yang digunakan dalam project ini adalah portfolio website yang dikembangkan menggunakan HTML dan CSS. Website menampilkan informasi profil, keahlian teknis, beberapa project, serta informasi kontak.
 
